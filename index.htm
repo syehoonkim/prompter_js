@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Prompter by Kim Syehoon</title>
+    <style>
+        body{
+            background-color: black;
+        }
+        canvas{
+            position: fixed;
+            top:50%;
+            left:100px;
+            margin:0%;
+        }
+        .buttons{
+            color: white;
+        }
+        label{
+            background-color: #7F9CCB;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px ridge black;
+            font-size: 0.8rem;
+            height: auto;
+        }
+        #labelForExitFullscreen{
+            position:absolute;
+            top:0px;
+            right:0px;
+            height:30px;
+            width:30px;
+            margin:0;
+            opacity:0%;
+        }
+        .marquee{
+            color: white;
+            font-size:100pt;
+            width:70%;
+            position:absolute;
+            top:50px;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin:auto;
+            margin-left:200px;
+            padding-right:10%;
+            overflow:hidden;
+        }
+        .marquee .inner{
+            width:100%;
+            position:absolute;
+            overflow:hidden;
+        }
+        .marquee .inner > *{
+            word-break: keep-all;
+        }
+    </style>
+</head>
+<body>
+<div class="buttons">
+    <label for="file-input">텍스트 파일 선택</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="start_scroll">스크롤</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="stop_scroll">스크롤 정지</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="speed_up">속도 증가</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="speed_down">속도 감소</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="largerFont">글자 확대</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="smallerFont">글자 축소</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="enterFullscreen">전체 화면</label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label for="exitFullscreen" id="labelForExitFullscreen"></label>
+    <input type="file" id="file-input" accept=".txt">
+    <button type="button" id="start_scroll"></button>
+    <button type="button" id="speed_up"></button>
+    <button type="button" id="speed_down"></button>
+    <button type="button" id="stop_scroll"></button>
+    <button type="button" id="largerFont"></button>
+    <button type="button" id="smallerFont"></button>
+    <button type="button" id="enterFullscreen"></button>
+    <button type="button" id="exitFullscreen"></button>
+</div>
+<canvas id="triangle_canvas"></canvas>
+<div class="marquee">
+    <div class="inner">
+        <span></span>
+    </div>
+</div>
+<span id="fullscreen"></span>
+<script>
+    var input=document.getElementById('file-input');
+    input.addEventListener('change',readTextFile);
+    input.style.opacity="0";
+
+    var speedUp=document.getElementById('speed_up');
+    speedUp.addEventListener('click',speedUpFunc);
+    speedUp.style.opacity="0";
+
+    var speedDown=document.getElementById('speed_down');
+    speedDown.addEventListener('click',speedDownFunc);
+    speedDown.style.opacity="0";
+
+    var scrollStart=document.getElementById('start_scroll');
+    scrollStart.addEventListener('click',scroller);
+    scrollStart.style.opacity="0";
+
+    var scrollStop=document.getElementById('stop_scroll');
+    scrollStop.addEventListener('click',function(){shouldLoop=0;});
+    scrollStop.style.opacity="0";
+
+    var largerFont=document.getElementById('largerFont');
+    largerFont.addEventListener('click',largerFontFunction);
+    largerFont.style.opacity='0';
+
+    var smallerFont=document.getElementById('smallerFont');
+    smallerFont.addEventListener('click',smallerFontFunction);
+    smallerFont.style.opacity='0';
+
+    var enterFullscreen=document.getElementById('enterFullscreen');
+    enterFullscreen.addEventListener('click',function(){document.documentElement.requestFullscreen();});
+    enterFullscreen.f11=false;
+    enterFullscreen.style.opacity='0';
+
+    var exitFullscreen=document.getElementById('exitFullscreen');
+    exitFullscreen.addEventListener('click',function(){document.exitFullscreen();});
+    exitFullscreen.f11='false';
+    exitFullscreen.style.opacity='0';
+
+    drawTriangle();
+
+    var marqueeText=document.getElementsByTagName('span')[0];
+    var targetMarquee=document.querySelector('.marquee');
+
+    var isFullScreen=false;
+    var isF11Pressed=false;
+    var progress=1;
+    var speed=0.7;
+    var shouldLoop=1;
+    var hasStarted=0;
+
+    try{
+        targetMarquee.style.fontSize=JSON.parse(localStorage.getItem('fontSize'));
+        speed=JSON.parse(localStorage.getItem('speed'));
+    }
+    catch{}
+
+    window.addEventListener("keydown",function(e){
+        if(e.key=="+")
+            largerFontFunction();
+        else if (e.key=='-')
+            smallerFontFunction();
+        else if (e.key=='F11')
+            isF11Pressed=true;
+    })
+
+    function speedUpFunc(){
+        speed+=0.5;
+        localStorage.setItem('speed',JSON.stringify(speed));
+    }
+
+    function speedDownFunc(){
+        speed-=0.5;
+        localStorage.setItem('speed',JSON.stringify(speed));
+    }
+
+    function toggleFullScreen(){
+        var labels=document.getElementsByTagName('label');
+        if (isFullScreen){
+            for (var i=0;i<labels.length;i++)
+                labels[i].style.display='none';
+            document.getElementById('labelForExitFullscreen'). style.display='';
+        }
+        else{
+            for (var i=0;i<labels.length;i++)
+                labels[i].style.display='';
+        }
+        isFullScreen=!isFullScreen;
+    }
+
+    window.addEventListener('wheel',function(e){
+        e.preventDefault();
+        speed+=e.deltaY*0.001;
+        localStorage.setItem('speed',JSON.stringify(speed));
+        },{passive:false});
+
+    function readTextFile(){
+        var file=input.files[0];
+        var reader=new FileReader();
+        reader.readAsText(file,'EUC-KR');
+        reader.onload=readerEvent=>{
+            marqueeText.innerHTML='<br/><br/><br/><br/><br/>'+readerEvent.target.result.toString();
+        }
+    }
+
+    function drawTriangle() {
+        var canvas = document.getElementById('triangle_canvas');
+        var context = canvas.getContext('2d');
+        context.beginPath();
+        context.moveTo(0, 0);
+        context.lineTo(0, 100);
+        context.lineTo(100, 50);
+        context.fillStyle="#FF0000";
+        context.fill();
+        context.strokeStyle="#FF0000";
+        context.stroke();
+    }
+
+    function scroller(){
+        shouldLoop=1;
+        if(!hasStarted){
+            progress=1;
+            hasStarted=1;
+            marqueeHandle();
+        }
+        else{
+            marqueeHandle();
+        }
+    }
+
+    function marqueeHandle(){
+        const marquee=document.querySelectorAll('.marquee');
+        marquee.forEach(function(el){
+            const container=el.querySelector('.inner');
+            const content=el.querySelector('.inner > *');
+            let clone=content.cloneNode(true);
+            container.appendChild(clone);
+            function loop() {
+                if (shouldLoop)
+                {
+                    progress = progress - speed;
+                    container.style.transform = 'translateY(' + progress + 'px';
+                    window.requestAnimationFrame(loop);
+                }
+            }
+            loop();
+        });
+    }
+
+    function largerFontFunction(){
+        var fontSize=(parseInt(getComputedStyle(targetMarquee).fontSize.slice(0,-2))+5)+'px'
+        targetMarquee.style.fontSize=fontSize;
+        localStorage.setItem('fontSize',JSON.stringify(fontSize));
+    }
+
+    function smallerFontFunction()
+    {
+        var fontSize=(parseInt(getComputedStyle(targetMarquee).fontSize.slice(0,-2))-5)+'px'
+        targetMarquee.style.fontSize=fontSize;
+        localStorage.setItem('fontSize',JSON.stringify(fontSize));
+    }
+
+    const el = document.getElementById('fullscreen')
+
+    const query = matchMedia('(display-mode: fullscreen)')
+    const handler = e => {
+        toggleFullScreen();
+    }
+
+    handler(query);
+    query.addListener(handler);
+
+</script>
+</body>
+</html>
